@@ -1,0 +1,7 @@
+simulations/results
+results/
+*.elog
+*.vec
+*.sca
+*.vci
+out/
