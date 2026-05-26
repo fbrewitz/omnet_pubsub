@@ -16,36 +16,30 @@ using namespace omnetpp;
 
 namespace pub {
 
-Define_Module(PublisherSafety);
+Define_Module(PublisherEchoApp);
 
 
 // To initialize my own parameters
-void PublisherSafety::initialize(int stage)
+void PublisherEchoApp::initialize(int stage)
 {
     // To be able to initialize my own PubSub parameters
     UdpBasicApp::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL)
     {
-        //publisherId = par("publisherId");
-        //dataSetWriterId = par("dataSetWriterId");
-        //publisherInterval = par("publisherInterval");
-
-        deltaSignal = registerSignal("delta");
-        //seqNr;
     }
 }
 
 
 // To add my own statistics
-void PublisherSafety::finish()
+void PublisherEchoApp::finish()
 {
 
     UdpBasicApp::finish();
 }
 
 
-void PublisherSafety::sendPacket()
+void PublisherEchoApp::sendPacket()
 {
     // Send pkt to Sub node A
     std::ostringstream str;
@@ -55,9 +49,9 @@ void PublisherSafety::sendPacket()
         packet->addTag<FragmentationReq>()->setDontFragment(true);
     const auto& payload = makeShared<ApplicationPacket>();
     payload->setChunkLength(B(par("messageLength")));
-    payload->setSequenceNumber(seqNr);
+    payload->setSequenceNumber(numSent);
     payload->addTag<PublisherTimeTag>()->setPublisherTime(publishTime); // so that the Subscriber in node A can measure RTT, reuse the same time
-    payload->addTag<CreationTimeTag>()->setCreationTime(simTime()); // perhaps edit this to use this for RTT instead, use another tag for delay in Pub B
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime()); 
     packet->insertAtBack(payload);
     L3Address destAddr = chooseDestAddr();
     emit(packetSentSignal, packet);
@@ -66,8 +60,7 @@ void PublisherSafety::sendPacket()
 }
 
 
-// Override the function from the base class, keep almost all logic but remove the WriterGroup and Starts since it only sends upon "arrival" from the Sub
-void PublisherSafety::processStart()
+void PublisherEchoApp::processStart()
 {
     socket.setOutputGate(gate("socketOut"));
     const char *localAddress = par("localAddress");
@@ -104,11 +97,8 @@ void PublisherSafety::processStart()
 
 
 // To add my own logic for timing parameters
-void PublisherSafety::processSend()
+void PublisherEchoApp::processSend()
 {
-    //startTimePublish = simTime();
-    //EV_INFO << "In processWriterGroup: startTimePublish: " << startTimePublish.inUnit(SIMTIME_US) << "us" << endl;
-
     sendPacket();
     clocktime_t interval = par("sendInterval");
     if (stopTime < CLOCKTIME_ZERO || getClockTime() + interval < stopTime) {
@@ -123,10 +113,8 @@ void PublisherSafety::processSend()
 }
 
 
-// Add to this later in order to add other timing characteristics as well
-void PublisherSafety::processEncoding()
+void PublisherEchoApp::processEncoding()
 {
-    // -> From processStart -> to processSend, this is in between!!
     publishedDataSet = par("publishedDataSet");
     dataSetWriter = par("dataSetWriter");
     writerGroup = par("writerGroup");
@@ -139,7 +127,7 @@ void PublisherSafety::processEncoding()
 }
 
 
-void PublisherSafety::processPacket(Packet *pk)
+void PublisherEchoApp::processPacket(Packet *pk)
 {
     EV_INFO << "Received packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
     emit(packetReceivedSignal, pk);
@@ -154,55 +142,22 @@ void PublisherSafety::processPacket(Packet *pk)
      else {
          EV_WARN << "No PublisherTimeTag found in payload!\n";
      }
-
-     auto tagCreation = payload->findTag<CreationTimeTag>();
-     if (tagCreation != nullptr) {
-         creationTime = tagCreation->getCreationTime();
-         EV_INFO << "creationTime = " << creationTime << " s\n";
-      }
-      else {
-         EV_WARN << "No CreationTimeTag found in payload!\n";
-      }
-
-     auto SeqNrPublisher = pk->peekAtFront<ApplicationPacket>();
-     if (SeqNrPublisher != nullptr) {
-         seqNr = SeqNrPublisher->getSequenceNumber();
-         EV_INFO << "Sequence number in Pub node B, rec from Sub: " << seqNr << endl;
-     }
-     else {
-         EV_WARN << "No sequenceNumber found payload!\n";
-     }
-
-    // get delta (time between this pub and the sub)
-    simtime_t end = simTime();
-    simtime_t diff = end - creationTime;
-    delta = diff.inUnit(SIMTIME_NS);
-
-    EV_INFO << "end time: " << end << " ns" << endl;
-    EV_INFO << "Emitting delta signal: " << delta << " ns" << endl;
-    emit(deltaSignal, delta);
-
-    // Just emit the delta signal and do nothing, this will have its own sendInterval!! It does not depend on the SUbscriber
 }
 
 
-void PublisherSafety::setSocketOptions()
+void PublisherEchoApp::setSocketOptions()
 {
     UdpBasicApp::setSocketOptions();
-
-    // Explicitly join the multicast group
-    //L3Address multicastAddr = L3AddressResolver().resolve("239.1.1.1");
-    //socket.joinMulticastGroup(multicastAddr);
 }
 
-void PublisherSafety::socketDataArrived(UdpSocket *socket, Packet *packet)
+void PublisherEchoApp::socketDataArrived(UdpSocket *socket, Packet *packet)
 {
     // process incoming packet
     processPacket(packet);
 }
 
-// Only if I want to change the logic of self messages etc
-void PublisherSafety::handleMessageWhenUp(cMessage *msg)
+
+void PublisherEchoApp::handleMessageWhenUp(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
