@@ -1,6 +1,6 @@
-#include "SubscriberSafety.h"
+#include "SubscriberEcho.h"
 #include "PublisherTimeTag_m.h"
-#include "PublisherSafety.h"
+#include "PublisherEcho.h"
 using namespace inet;
 using namespace omnetpp;
 
@@ -18,32 +18,26 @@ using namespace omnetpp;
 
 namespace sub {
 
-Define_Module(SubscriberSafety); // Is this necessary?? Documentation says so
+Define_Module(SubscriberEchoApp); 
 
 // Override methods here
-void SubscriberSafety::initialize(int stage)
+void SubscriberEchoApp::initialize(int stage)
 {
     UdpBasicApp::initialize(stage); // to not skip the UdpSink setup for ports etc
 
     if (stage == INITSTAGE_LOCAL)
     {
-        delaySignal = registerSignal("delay");
-
-        //dataSetWriterId = par("dataSetWriterId");
-        //messageReceiveTimeout = par("messageReceiveTimeout");
-        //readerGroupExecTime = par("readerGroupExecTime");
-        //seqNr;
     }
 }
 
 
-void SubscriberSafety::finish()
+void SubscriberEchoApp::finish()
 {
     UdpBasicApp::finish();
 }
 
 
-void SubscriberSafety::processStart()
+void SubscriberEchoApp::processStart()
 {
     socket.setOutputGate(gate("socketOut"));
     const char *localAddress = par("localAddress");
@@ -69,8 +63,8 @@ void SubscriberSafety::processStart()
     }
 }
 
-// This is the same as in UdpSink
-void SubscriberSafety::processPacket(Packet *pk)
+
+void SubscriberEchoApp::processPacket(Packet *pk)
 {
     EV_INFO << "Received packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
     emit(packetReceivedSignal, pk);
@@ -84,12 +78,6 @@ void SubscriberSafety::processPacket(Packet *pk)
         else {
             EV_WARN << "No PublisherTimeTag found in payload!\n";
        }
-
-        auto SeqNrPublisher = pk->peekAtFront<ApplicationPacket>();
-        if (SeqNrPublisher != nullptr) {
-            seqNr = SeqNrPublisher->getSequenceNumber();
-            EV_INFO << "Sequence number in Sub B: " << seqNr << endl;
-        }
 
     delete pk;
 
@@ -105,78 +93,29 @@ void SubscriberSafety::processPacket(Packet *pk)
 
 
 
-void SubscriberSafety::processDecoding()
+void SubscriberEchoApp::processDecoding()
 {
     simtime_t end = simTime();
     simtime_t diff = end - publishTime;
-    delay = diff.inUnit(SIMTIME_US);
-    EV_INFO << "In processReaderGroup: publishTime" << publishTime.inUnit(SIMTIME_US) << "us" << endl;
-    EV_INFO << "In processReaderGroup: endTime" << end.inUnit(SIMTIME_US) << "us" << endl;
-    EV_INFO << "In processReaderGroup: diff in time" << diff.inUnit(SIMTIME_US) << "us" << endl;
+    latency = diff.inUnit(SIMTIME_US);
 
     EV_INFO << "In processReaderGroup for " << decodingExecTime << "us" << endl;
     numReceived++;
 
-    emit(delaySignal, delay);
+    emit(latencySignal, latency);
 
     selfMsg->setKind(SEND);
     scheduleAt(simTime(), selfMsg);
-
-    /*std::ostringstream str;
-    str << packetName << "-" << numSent;
-    Packet *pk = new Packet(str.str().c_str());
-    if (dontFragment)
-        pk->addTag<FragmentationReq>()->setDontFragment(true);
-    const auto& payload = makeShared<ApplicationPacket>();
-    payload->setChunkLength(B(par("messageLength")));
-    payload->setSequenceNumber(numSent);
-    payload->addTag<PublisherTimeTag>()->setPublisherTime(publishTime); // to measure RTT later in Sub node A
-    payload->addTag<CreationTimeTag>()->setCreationTime(simTime()); // to be used for delta in Pub B!!
-    pk->insertAtBack(payload);
-    L3Address destAddr = chooseDestAddr();
-
-    // get the containing node
-    cModule *node = getContainingNode(this);
-
-    // Find the publisher module
-    cModule *publisherModule = node->getSubmodule("app", 1);
-    if (!publisherModule) {
-        EV_ERROR << "Publisher module not found at index 1!\n";
-        return;
-    }
-
-    // Cast to the expected type
-    pub::PublisherSafety *publisher = dynamic_cast<pub::PublisherSafety *>(publisherModule);
-    if (!publisher) {
-        EV_ERROR << "Failed to cast to PublisherSafety type!\n";
-        return;
-    }
-
-    // Use the interface
-    publisher->processPacket(pk);*/
 }
 
 
-void SubscriberSafety::processSend()
+void SubscriberEchoApp::processSend()
 {
-    //startTimeSub = simTime();
-    //EV_INFO << "In processWriterGroup: startTimePublish: " << startTimePublish.inUnit(SIMTIME_US) << "us" << endl;
-
     sendPacket();
-    /*clocktime_t interval = par("sendInterval");
-    if (stopTime < CLOCKTIME_ZERO || getClockTime() + interval < stopTime) {
-        clocktime_t d = interval - lastWriterGroupExec;
-        selfMsg->setKind(WG);
-        scheduleClockEventAfter(d, selfMsg);
-    }
-    else {
-        selfMsg->setKind(STOP);
-        scheduleClockEventAt(stopTime, selfMsg);
-    }*/
 }
 
-// Is it ok to create a new one to "copy" it to the Pub in B? They will have the same seqNum, and we can use the creationTime to measure the delta
-void SubscriberSafety::sendPacket()
+
+void SubscriberEchoApp::sendPacket()
 {
     std::ostringstream str;
     str << packetName << "-" << numSent;
@@ -187,35 +126,15 @@ void SubscriberSafety::sendPacket()
     payload->setChunkLength(B(par("messageLength")));
     payload->setSequenceNumber(seqNr);
     payload->addTag<PublisherTimeTag>()->setPublisherTime(publishTime); // to measure RTT later in Sub node A
-    payload->addTag<CreationTimeTag>()->setCreationTime(simTime()); // to be used for delta in Pub B!!
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime()); 
     packet->insertAtBack(payload);
     L3Address destAddr = chooseDestAddr();
     emit(packetSentSignal, packet);
     socket.sendTo(packet, destAddr, destPort);
     numSent++;
-
-    // get the containing node
-      /*  cModule *node = getContainingNode(this);
-
-        // Find the publisher module
-        cModule *publisherModule = node->getSubmodule("app", 1);
-        if (!publisherModule) {
-            EV_ERROR << "Publisher module not found at index 1!\n";
-            return;
-        }
-
-        // Cast to the expected type
-        pub::PublisherSafety *publisher = dynamic_cast<pub::PublisherSafety *>(publisherModule);
-        if (!publisher) {
-            EV_ERROR << "Failed to cast to PublisherSafety type!\n";
-            return;
-        }
-
-        // Use the interface
-        publisher->processPacket(packet);*/
 }
 
-void SubscriberSafety::setSocketOptions()
+void SubscriberEchoApp::setSocketOptions()
 {
     UdpBasicApp::setSocketOptions();
 
@@ -224,7 +143,7 @@ void SubscriberSafety::setSocketOptions()
     socket.joinMulticastGroup(multicastAddr);
 }
 
-void SubscriberSafety::socketDataArrived(UdpSocket *socket, Packet *packet)
+void SubscriberEchoApp::socketDataArrived(UdpSocket *socket, Packet *packet)
 {
     // process incoming packet
     processPacket(packet);
@@ -232,7 +151,7 @@ void SubscriberSafety::socketDataArrived(UdpSocket *socket, Packet *packet)
 
 
 
-void SubscriberSafety::handleMessageWhenUp(cMessage *msg)
+void SubscriberEchoApp::handleMessageWhenUp(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
         ASSERT(msg == selfMsg);
