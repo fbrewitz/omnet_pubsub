@@ -1,6 +1,5 @@
 #pragma once
 
-//#include "inet/applications/udpapp/UdpSink.h"
 #include "inet/applications/udpapp/UdpBasicApp.h"
 #include "inet/common/INETDefs.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
@@ -8,27 +7,18 @@
 
 namespace sub {
 
-class SubscriberSafety : public inet::UdpBasicApp
+class SubscriberEchoApp : public inet::UdpBasicApp
 {
 protected:
     enum SelfMsgKinds { START = 1, STOP, DECODE, SEND };
-    //parameters here
-    //int publisherId;
-    //int dataSetWriterId; // If the value is 0 (null), the parameter shall be ignored and all received DataSetMessages pass the DataSetWriterId filter
-    //double messageReceiveTimeout; // only necessary if I use the "corresponding" parameters in publisher?
 
-    double decodingExecTime; // what do i use this for?
+    double decodingExecTime; 
     double subscribedDataSet;
     double dataSetReader;
     double readerGroup;
     double processingRecTime;
     omnetpp::simtime_t publishTime;
-    omnetpp::simtime_t delay;
 
-    int seqNr = 0;
-
-private:
-    omnetpp::simsignal_t delaySignal;
 
 protected:
     // override methods here
